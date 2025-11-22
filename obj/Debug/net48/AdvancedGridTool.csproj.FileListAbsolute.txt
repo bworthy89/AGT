@@ -1,0 +1,9 @@
+D:\Advanced Grid Tool\AdvancedGridTool\bin\Debug\net48\AdvancedGridTool.dll
+D:\Advanced Grid Tool\AdvancedGridTool\bin\Debug\net48\AdvancedGridTool.pdb
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.csproj.AssemblyReference.cache
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.GeneratedMSBuildEditorConfig.editorconfig
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.AssemblyInfoInputs.cache
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.AssemblyInfo.cs
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.csproj.CoreCompileInputs.cache
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.dll
+D:\Advanced Grid Tool\AdvancedGridTool\obj\Debug\net48\AdvancedGridTool.pdb

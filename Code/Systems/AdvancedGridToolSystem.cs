@@ -53,8 +53,10 @@ namespace AdvancedGridTool
         private static ILog _log;
         private GridMode _currentMode = GridMode.Standard;
         private float3 _startPosition;
+        private float3 _elbowPosition;   // NEW: Control point for grid shape (Line Tool pattern)
         private float3 _endPosition;
         private bool _hasStartPosition;
+        private bool _hasElbowPosition;  // NEW: Second click state
         private bool _hasEndPosition;
         private float _spacing = 50f;
         private int2 _gridDimensions = new int2(5, 5);
@@ -291,39 +293,48 @@ namespace AdvancedGridTool
             if (!GetRaycastResult(out controlPoint))
                 return;
 
-            // Apply action - set grid corners
+            // Apply action - 3-click system like Line Tool (start → elbow → end)
             if (applyAction.WasPressedThisFrame())
             {
                 if (!_hasStartPosition)
                 {
+                    // First click: Set start position
                     _startPosition = controlPoint.m_Position;
                     _hasStartPosition = true;
                     PlaySound(true);
-                    _log.Info($"Set start position: {_startPosition}");
+                    _log.Info($"[1/3] Set START position: {_startPosition}");
+                }
+                else if (!_hasElbowPosition)
+                {
+                    // Second click: Set elbow/control point
+                    _elbowPosition = controlPoint.m_Position;
+                    _hasElbowPosition = true;
+                    PlaySound(true);
+                    _log.Info($"[2/3] Set ELBOW position: {_elbowPosition}");
                 }
                 else if (!_hasEndPosition)
                 {
+                    // Third click: Set end position and generate grid
                     _endPosition = controlPoint.m_Position;
                     _hasEndPosition = true;
 
-                    float3 delta = _endPosition - _startPosition;
-                    float clickDistance = math.length(delta);
-                    _log.Info($"CLICK: Set end position: {_endPosition}, distance from start: {clickDistance:F2}m");
+                    _log.Info($"[3/3] Set END position: {_endPosition}");
+                    _log.Info($"Generating grid: Start={_startPosition}, Elbow={_elbowPosition}, End={_endPosition}");
 
                     GenerateGrid();
 
-                    // Automatically create roads along grid lines
+                    // Automatically create road previews
                     ApplyGridRoads();
 
                     PlaySound(false);
                 }
                 else
                 {
-                    // Reset to start new grid
+                    // Fourth click: Reset to start new grid
                     ClearGrid();
                     _startPosition = controlPoint.m_Position;
                     _hasStartPosition = true;
-                    _log.Info("Reset and set new start position");
+                    _log.Info("[1/3] Reset and set new START position");
                 }
             }
 
@@ -341,11 +352,17 @@ namespace AdvancedGridTool
                 }
             }
 
-            // Update end position preview while dragging
-            if (_hasStartPosition && !_hasEndPosition)
+            // Update preview while dragging (Line Tool pattern)
+            if (_hasStartPosition && _hasElbowPosition && !_hasEndPosition)
             {
+                // Preview grid while dragging to set end position
                 _endPosition = controlPoint.m_Position;
                 GenerateGrid();
+            }
+            else if (_hasStartPosition && !_hasElbowPosition)
+            {
+                // Preview elbow while dragging to set it
+                _elbowPosition = controlPoint.m_Position;
             }
         }
 
@@ -374,22 +391,10 @@ namespace AdvancedGridTool
 
         private void GenerateStandardGrid()
         {
-            // Safety check: make sure start and end positions are different
-            float3 delta = _endPosition - _startPosition;
-            float distance = math.length(delta);
+            // IMPLEMENTED EXACTLY LIKE LINE TOOL'S GridLines.cs
+            // Uses elbow-based grid calculation with Lerp
 
-            _log.Info($"GenerateStandardGrid: Start={_startPosition}, End={_endPosition}, Distance={distance}m");
-
-            if (distance < 1.0f) // Minimum 1 meter apart
-            {
-                _log.Warn($"Start and end positions are too close ({distance:F2}m), need at least 1m");
-                return;
-            }
-
-            float3 direction = math.normalize(delta);
-            float3 perpendicular = new float3(-direction.z, 0, direction.x);
-
-            // Safety check: make sure terrain system is valid
+            // Safety check: terrain system
             if (_terrainSystem == null)
             {
                 _log.Error("Terrain system is null, cannot generate grid");
@@ -398,50 +403,95 @@ namespace AdvancedGridTool
 
             TerrainHeightData heightData = _terrainSystem.GetHeightData();
 
-            for (int x = 0; x <= _gridDimensions.x; x++)
-            {
-                for (int y = 0; y <= _gridDimensions.y; y++)
-                {
-                    float3 point = _startPosition +
-                                  direction * (x * _spacing) +
-                                  perpendicular * (y * _spacing);
+            // Calculate base lines (like Line Tool)
+            float3 baseLine1Start = _startPosition;
+            float3 baseLine1End = _elbowPosition;
+            float3 baseLine2Start = _elbowPosition;
+            float3 baseLine2End = _endPosition;
 
-                    point.y = TerrainUtils.SampleHeight(ref heightData, point);
-                    _gridPoints.Add(point);
+            float baseLine1Length = math.distance(baseLine1Start, baseLine1End);
+            float baseLine2Length = math.distance(baseLine2Start, baseLine2End);
+
+            _log.Info($"Grid generation: Base1={baseLine1Length:F1}m, Base2={baseLine2Length:F1}m");
+
+            // Calculate grid steps based on spacing
+            int baseCount = math.max(1, (int)(baseLine1Length / _spacing));
+            int sideCount = math.max(1, (int)(baseLine2Length / _spacing));
+
+            float baseStep = 1.0f / baseCount;
+            float sideStep = 1.0f / sideCount;
+
+            _log.Info($"Grid dimensions: {baseCount + 1} x {sideCount + 1} points");
+
+            // Generate grid points using Lerp (EXACT LINE TOOL ALGORITHM)
+            for (float baseProportion = 0; baseProportion <= 1.001f; baseProportion += baseStep)
+            {
+                for (float sideProportion = 0; sideProportion <= 1.001f; sideProportion += sideStep)
+                {
+                    // Lerp along both base lines
+                    float baseLerp = math.min(baseProportion, 1.0f);
+                    float sideLerp = math.min(sideProportion, 1.0f);
+
+                    // Calculate point position (Line Tool formula)
+                    float3 basePoint = math.lerp(baseLine1Start, baseLine1End, baseLerp);
+                    float3 sidePoint = math.lerp(baseLine2Start, baseLine2End, sideLerp);
+                    float3 gridPoint = basePoint + sidePoint - _elbowPosition;
+
+                    // Sample terrain height
+                    gridPoint.y = TerrainUtils.SampleHeight(ref heightData, gridPoint);
+                    _gridPoints.Add(gridPoint);
                 }
             }
 
-            // Generate grid lines
-            int cols = _gridDimensions.x + 1;
-            int rows = _gridDimensions.y + 1;
+            _log.Info($"Generated {_gridPoints.Count} grid points");
 
-            // Horizontal lines
-            for (int y = 0; y < rows; y++)
+            // Generate grid lines connecting consecutive points
+            GenerateGridLines(baseCount + 1, sideCount + 1);
+        }
+
+        private void GenerateGridLines(int cols, int rows)
+        {
+            // Create horizontal lines (along base direction)
+            for (int row = 0; row < rows; row++)
             {
-                for (int x = 0; x < cols - 1; x++)
+                for (int col = 0; col < cols - 1; col++)
                 {
-                    _gridLines.Add(new GridLine
+                    int index1 = row * cols + col;
+                    int index2 = row * cols + (col + 1);
+
+                    if (index1 < _gridPoints.Count && index2 < _gridPoints.Count)
                     {
-                        Start = _gridPoints[x * rows + y],
-                        End = _gridPoints[(x + 1) * rows + y],
-                        IsPrimary = (y % 2 == 0)
-                    });
+                        _gridLines.Add(new GridLine
+                        {
+                            Start = _gridPoints[index1],
+                            End = _gridPoints[index2],
+                            IsPrimary = true
+                        });
+                    }
                 }
             }
 
-            // Vertical lines
-            for (int x = 0; x < cols; x++)
+            // Create vertical lines (along side direction)
+            for (int col = 0; col < cols; col++)
             {
-                for (int y = 0; y < rows - 1; y++)
+                for (int row = 0; row < rows - 1; row++)
                 {
-                    _gridLines.Add(new GridLine
+                    int index1 = row * cols + col;
+                    int index2 = (row + 1) * cols + col;
+
+                    if (index1 < _gridPoints.Count && index2 < _gridPoints.Count)
                     {
-                        Start = _gridPoints[x * rows + y],
-                        End = _gridPoints[x * rows + (y + 1)],
-                        IsPrimary = (x % 2 == 0)
-                    });
+                        _gridLines.Add(new GridLine
+                        {
+                            Start = _gridPoints[index1],
+                            End = _gridPoints[index2],
+                            IsPrimary = false
+                        });
+                    }
                 }
             }
+
+            _log.Info($"Generated {_gridLines.Count} grid lines ({cols}x{rows} grid)");
         }
 
         private void RegenerateGrid()
@@ -663,6 +713,7 @@ namespace AdvancedGridTool
         private void ClearGrid()
         {
             _hasStartPosition = false;
+            _hasElbowPosition = false;
             _hasEndPosition = false;
             _gridPoints.Clear();
             _gridLines.Clear();

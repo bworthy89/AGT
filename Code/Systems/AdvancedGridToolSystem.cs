@@ -454,6 +454,10 @@ namespace AdvancedGridTool
 
         private void RenderGridOverlay()
         {
+            // Don't render overlay if roads have been created
+            if (_hasEndPosition)
+                return;
+
             if (!_hasStartPosition)
                 return;
 

@@ -356,8 +356,23 @@ namespace AdvancedGridTool
 
         private void GenerateStandardGrid()
         {
-            float3 direction = math.normalize(_endPosition - _startPosition);
+            // Safety check: make sure start and end positions are different
+            float3 delta = _endPosition - _startPosition;
+            if (math.lengthsq(delta) < 0.01f)
+            {
+                _log.Warn("Start and end positions are too close, skipping grid generation");
+                return;
+            }
+
+            float3 direction = math.normalize(delta);
             float3 perpendicular = new float3(-direction.z, 0, direction.x);
+
+            // Safety check: make sure terrain system is valid
+            if (_terrainSystem == null)
+            {
+                _log.Error("Terrain system is null, cannot generate grid");
+                return;
+            }
 
             TerrainHeightData heightData = _terrainSystem.GetHeightData();
 
@@ -419,6 +434,13 @@ namespace AdvancedGridTool
         {
             if (!_hasStartPosition)
                 return;
+
+            // Safety check: make sure query has data before accessing
+            if (_renderingSettingsQuery.IsEmptyIgnoreFilter)
+            {
+                _log.Warn("Rendering settings query is empty, skipping overlay render");
+                return;
+            }
 
             GuideLineSettingsData guideLineSettings = _renderingSettingsQuery.GetSingleton<GuideLineSettingsData>();
 

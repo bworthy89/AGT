@@ -29,24 +29,37 @@ namespace AdvancedGridTool
             Instance = this;
             _log = LogManager.GetLogger($"{nameof(AdvancedGridTool)}.{nameof(AdvancedGridToolUISystem)}").SetShowsErrorsInUI(false);
 
+            try
+            {
+                // Get system references
+                _gridToolSystem = World.GetOrCreateSystemManaged<AdvancedGridToolSystem>();
+                _toolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
 
-            // Get system references
-            _gridToolSystem = World.GetOrCreateSystemManaged<AdvancedGridToolSystem>();
-            _toolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
+                if (_gridToolSystem == null || _toolSystem == null)
+                {
+                    _log.Error("Failed to get required system references");
+                    return;
+                }
 
-            // Subscribe to prefab changed events (like Line Tool)
-            _toolSystem.EventPrefabChanged = (Action<PrefabBase>)Delegate.Combine(
-                _toolSystem.EventPrefabChanged,
-                new Action<PrefabBase>(OnPrefabChanged)
-            );
+                // Subscribe to prefab changed events (like Line Tool)
+                _toolSystem.EventPrefabChanged = (Action<PrefabBase>)Delegate.Combine(
+                    _toolSystem.EventPrefabChanged,
+                    new Action<PrefabBase>(OnPrefabChanged)
+                );
 
-            // Create value bindings (using GetterValueBinding like Line Tool)
-            CreateBindings();
+                // Create value bindings (using GetterValueBinding like Line Tool)
+                CreateBindings();
 
-            // Create trigger bindings for UI actions
-            CreateTriggers();
+                // Create trigger bindings for UI actions
+                CreateTriggers();
 
-            _log.Info("Advanced Grid Tool UI System created");
+                _log.Info("Advanced Grid Tool UI System created");
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"Error creating Advanced Grid Tool UI System: {ex.Message}");
+                _log.Error($"Stack trace: {ex.StackTrace}");
+            }
         }
 
         protected override void OnDestroy()
@@ -57,64 +70,71 @@ namespace AdvancedGridTool
 
         private void CreateBindings()
         {
+            // Safety check
+            if (_gridToolSystem == null || _toolSystem == null)
+            {
+                _log.Error("Cannot create bindings: system references are null");
+                return;
+            }
+
             // Tool active state (using GetterValueBinding like Line Tool)
             AddUpdateBinding(new GetterValueBinding<bool>(
                 "AdvancedGridTool",
                 "IsActive",
-                () => _toolSystem.activeTool == _gridToolSystem
+                () => _toolSystem != null && _gridToolSystem != null && _toolSystem.activeTool == _gridToolSystem
             ));
 
             // Current grid mode
             AddUpdateBinding(new GetterValueBinding<int>(
                 "AdvancedGridTool",
                 "CurrentMode",
-                () => (int)_gridToolSystem.CurrentMode
+                () => _gridToolSystem != null ? (int)_gridToolSystem.CurrentMode : 0
             ));
 
             // Spacing value
             AddUpdateBinding(new GetterValueBinding<float>(
                 "AdvancedGridTool",
                 "Spacing",
-                () => _gridToolSystem.Spacing
+                () => _gridToolSystem != null ? _gridToolSystem.Spacing : 50f
             ));
 
             // Grid dimensions
             AddUpdateBinding(new GetterValueBinding<int>(
                 "AdvancedGridTool",
                 "GridWidth",
-                () => _gridToolSystem.GridDimensions.x
+                () => _gridToolSystem != null ? _gridToolSystem.GridDimensions.x : 5
             ));
 
             AddUpdateBinding(new GetterValueBinding<int>(
                 "AdvancedGridTool",
                 "GridHeight",
-                () => _gridToolSystem.GridDimensions.y
+                () => _gridToolSystem != null ? _gridToolSystem.GridDimensions.y : 5
             ));
 
             // Show options panel
             AddUpdateBinding(new GetterValueBinding<bool>(
                 "AdvancedGridTool",
                 "ShowOptions",
-                () => _toolSystem.activeTool == _gridToolSystem
+                () => _toolSystem != null && _gridToolSystem != null && _toolSystem.activeTool == _gridToolSystem
             ));
 
             // Mode-specific options
             AddUpdateBinding(new GetterValueBinding<bool>(
                 "AdvancedGridTool",
                 "ShowStandardOptions",
-                () => _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Standard
+                () => _gridToolSystem != null && _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Standard
             ));
 
             AddUpdateBinding(new GetterValueBinding<bool>(
                 "AdvancedGridTool",
                 "ShowOrganicOptions",
-                () => _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Organic
+                () => _gridToolSystem != null && _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Organic
             ));
 
             AddUpdateBinding(new GetterValueBinding<bool>(
                 "AdvancedGridTool",
                 "ShowSuburbanOptions",
-                () => _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Suburban
+                () => _gridToolSystem != null && _gridToolSystem.CurrentMode == AdvancedGridToolSystem.GridMode.Suburban
             ));
 
             _log.Info("Created UI value bindings");
@@ -234,6 +254,12 @@ namespace AdvancedGridTool
         /// <returns>10 if the shift key is pressed, 0.1 if the control key is pressed, and 1 otherwise.</returns>
         private float GetSpacingStep()
         {
+            // Safety check for keyboard
+            if (UnityEngine.InputSystem.Keyboard.current == null)
+            {
+                return 1f;
+            }
+
             if (UnityEngine.InputSystem.Keyboard.current.shiftKey.isPressed)
             {
                 // Shift; 10m.

@@ -530,8 +530,9 @@ namespace AdvancedGridTool
                 string prefabName = _currentPrefab != null ? _currentPrefab.name : "Unknown";
                 _log.Info($"Creating road previews for {_gridLines.Count} grid lines using prefab: {prefabName}");
 
-                // Create road preview entities using EntityCommandBuffer
-                EntityCommandBuffer commandBuffer = new EntityCommandBuffer(Allocator.TempJob);
+                // CRITICAL: Use m_ToolOutputBarrier like Line Tool
+                // The game automatically adds Temp component to these entities!
+                EntityCommandBuffer commandBuffer = m_ToolOutputBarrier.CreateCommandBuffer();
 
                 try
                 {
@@ -540,9 +541,7 @@ namespace AdvancedGridTool
                         CreateRoadPreview(ref commandBuffer, line);
                     }
 
-                    // Execute the command buffer to create all road previews
-                    commandBuffer.Playback(EntityManager);
-                    _log.Info($"Successfully created {_gridLines.Count} road previews");
+                    _log.Info($"Queued {_gridLines.Count} road preview entities");
                 }
                 catch (Exception ex)
                 {
@@ -551,10 +550,6 @@ namespace AdvancedGridTool
                     {
                         _log.Error($"Stack trace: {ex.StackTrace}");
                     }
-                }
-                finally
-                {
-                    commandBuffer.Dispose();
                 }
             }
             catch (Exception ex)
@@ -590,23 +585,19 @@ namespace AdvancedGridTool
                 // Create a new entity for the road PREVIEW
                 Entity previewEntity = commandBuffer.CreateEntity();
 
-                // Add Temp component to make it a PREVIEW (blue highlighted)
-                commandBuffer.AddComponent(previewEntity, new Temp
-                {
-                    m_Flags = TempFlags.Create,
-                    m_Original = Entity.Null
-                });
+                // DON'T add Temp component manually - game adds it automatically
+                // via m_ToolOutputBarrier!
 
-                // Add CreationDefinition component WITHOUT Permanent flag
+                // Add CreationDefinition component (game will make it a preview automatically)
                 commandBuffer.AddComponent(previewEntity, new CreationDefinition
                 {
                     m_Prefab = _selectedPrefab,
                     m_Owner = Entity.Null,
-                    m_Flags = CreationFlags.None  // NOT Permanent - this makes it a preview
+                    m_RandomSeed = 0  // Could use random if needed
                 });
 
-                // Add NetCourse component with the curve
-                commandBuffer.AddComponent(previewEntity, new NetCourse
+                // Add NetCourse component with the curve (MATCHING LINE TOOL STRUCTURE)
+                NetCourse netCourse = new NetCourse
                 {
                     m_Curve = curve,
                     m_Length = distance,
@@ -615,22 +606,24 @@ namespace AdvancedGridTool
                     {
                         m_Position = startPos,
                         m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                        m_Elevation = startPos.y,
-                        m_ParentMesh = -1
+                        m_CourseDelta = 0f,  // Start of curve
+                        m_ParentMesh = -1,
+                        m_Flags = CoursePosFlags.IsFirst | CoursePosFlags.FreeHeight
                     },
                     m_EndPosition = new CoursePos
                     {
                         m_Position = endPos,
                         m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                        m_Elevation = endPos.y,
-                        m_ParentMesh = -1
+                        m_CourseDelta = 1f,  // End of curve
+                        m_ParentMesh = -1,
+                        m_Flags = CoursePosFlags.IsLast | CoursePosFlags.FreeHeight
                     }
-                });
+                };
+
+                commandBuffer.AddComponent(previewEntity, netCourse);
 
                 // Add Updated component to trigger processing
                 commandBuffer.AddComponent<Updated>(previewEntity);
-
-                _log.Info($"Created road preview entity from {startPos} to {endPos}");
             }
             catch (Exception ex)
             {

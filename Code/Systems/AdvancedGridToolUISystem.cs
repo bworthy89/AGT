@@ -4,7 +4,9 @@ using Colossal.UI.Binding;
 using Game;
 using Game.UI;
 using Game.Tools;
+using Game.Prefabs;
 using Unity.Entities;
+using Unity.Mathematics;
 
 namespace AdvancedGridTool
 {
@@ -31,6 +33,12 @@ namespace AdvancedGridTool
             // Get system references
             _gridToolSystem = World.GetOrCreateSystemManaged<AdvancedGridToolSystem>();
             _toolSystem = World.GetOrCreateSystemManaged<ToolSystem>();
+
+            // Subscribe to prefab changed events (like Line Tool)
+            _toolSystem.EventPrefabChanged = (Action<PrefabBase>)Delegate.Combine(
+                _toolSystem.EventPrefabChanged,
+                new Action<PrefabBase>(OnPrefabChanged)
+            );
 
             // Create value bindings (using GetterValueBinding like Line Tool)
             CreateBindings();
@@ -214,8 +222,31 @@ namespace AdvancedGridTool
 
         private void AdjustSpacing(float delta)
         {
-            _gridToolSystem.Spacing += delta;
-            _log.Info($"UI: Adjusted spacing by {delta} to {_gridToolSystem.Spacing}");
+            // Apply modifier step (like Line Tool)
+            float step = GetSpacingStep() * math.sign(delta);
+            _gridToolSystem.Spacing += step;
+            _log.Info($"UI: Adjusted spacing by {step} to {_gridToolSystem.Spacing}");
+        }
+
+        /// <summary>
+        /// Gets the spacing step value to apply, including effects of shift- (x10) or control- (x0.1) modifiers (like Line Tool).
+        /// </summary>
+        /// <returns>10 if the shift key is pressed, 0.1 if the control key is pressed, and 1 otherwise.</returns>
+        private float GetSpacingStep()
+        {
+            if (UnityEngine.InputSystem.Keyboard.current.shiftKey.isPressed)
+            {
+                // Shift; 10m.
+                return 10f;
+            }
+            else if (UnityEngine.InputSystem.Keyboard.current.ctrlKey.isPressed)
+            {
+                // Control; 0.1m.
+                return 0.1f;
+            }
+
+            // No modifiers pressed; just return the standard step (1m).
+            return 1f;
         }
 
         private void AdjustGridDimension(bool width, int delta)
@@ -237,6 +268,21 @@ namespace AdvancedGridTool
         {
             if (_gridToolSystem != null)
             {
+                _gridToolSystem.EnableTool();
+            }
+        }
+
+        /// <summary>
+        /// Handles changes in the selected prefab (like Line Tool).
+        /// </summary>
+        /// <param name="prefab">New selected prefab.</param>
+        private void OnPrefabChanged(PrefabBase prefab)
+        {
+            // If the grid tool is currently activated and the new prefab is a road, reactivate it
+            // (the game will reset the tool to the relevant NetTool).
+            if (_toolSystem.activeTool == _gridToolSystem && prefab is RoadPrefab)
+            {
+                _log.Info($"Prefab changed to {prefab.name}, reactivating grid tool");
                 _gridToolSystem.EnableTool();
             }
         }

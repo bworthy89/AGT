@@ -576,23 +576,19 @@ namespace AdvancedGridTool
                 m_Curve = curve,
                 m_Length = distance,
                 m_FixedIndex = -1,
-                m_StartPosition = new ControlPoint
+                m_StartPosition = new CoursePos
                 {
                     m_Position = startPos,
-                    m_OriginalEntity = Entity.Null,
-                    m_ElementIndex = 0,
                     m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Direction = new float2(direction.x, direction.z),
-                    m_Elevation = startPos.y
+                    m_Elevation = startPos.y,
+                    m_ParentMesh = -1
                 },
-                m_EndPosition = new ControlPoint
+                m_EndPosition = new CoursePos
                 {
                     m_Position = endPos,
-                    m_OriginalEntity = Entity.Null,
-                    m_ElementIndex = 1,
                     m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Direction = new float2(direction.x, direction.z),
-                    m_Elevation = endPos.y
+                    m_Elevation = endPos.y,
+                    m_ParentMesh = -1
                 }
             });
 

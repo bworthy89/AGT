@@ -504,98 +504,122 @@ namespace AdvancedGridTool
 
         private void ApplyGridRoads()
         {
-            // Check if we have a valid road prefab
-            if (_currentPrefab == null || _selectedPrefab == Entity.Null)
-            {
-                _log.Error("No road prefab selected, cannot create roads");
-                return;
-            }
-
-            if (_gridLines.Count == 0)
-            {
-                _log.Warn("No grid lines to create roads for");
-                return;
-            }
-
-            _log.Info($"Creating roads for {_gridLines.Count} grid lines using prefab: {_currentPrefab.name}");
-
-            // Create road entities using EntityCommandBuffer
-            EntityCommandBuffer commandBuffer = new EntityCommandBuffer(Allocator.TempJob);
-
             try
             {
-                foreach (var line in _gridLines)
+                // Check if we have a valid road prefab
+                if (_currentPrefab == null || _selectedPrefab == Entity.Null)
                 {
-                    CreateRoadEntity(ref commandBuffer, line);
+                    _log.Error("No road prefab selected, cannot create roads");
+                    return;
                 }
 
-                // Execute the command buffer to create all roads
-                commandBuffer.Playback(EntityManager);
-                _log.Info($"Successfully created {_gridLines.Count} roads");
+                if (_gridLines.Count == 0)
+                {
+                    _log.Warn("No grid lines to create roads for");
+                    return;
+                }
+
+                string prefabName = _currentPrefab != null ? _currentPrefab.name : "Unknown";
+                _log.Info($"Creating roads for {_gridLines.Count} grid lines using prefab: {prefabName}");
+
+                // Create road entities using EntityCommandBuffer
+                EntityCommandBuffer commandBuffer = new EntityCommandBuffer(Allocator.TempJob);
+
+                try
+                {
+                    foreach (var line in _gridLines)
+                    {
+                        CreateRoadEntity(ref commandBuffer, line);
+                    }
+
+                    // Execute the command buffer to create all roads
+                    commandBuffer.Playback(EntityManager);
+                    _log.Info($"Successfully created {_gridLines.Count} roads");
+                }
+                catch (Exception ex)
+                {
+                    _log.Error($"Failed to create roads: {ex.Message}");
+                    if (ex.StackTrace != null)
+                    {
+                        _log.Error($"Stack trace: {ex.StackTrace}");
+                    }
+                }
+                finally
+                {
+                    commandBuffer.Dispose();
+                }
             }
             catch (Exception ex)
             {
-                _log.Error($"Failed to create roads: {ex.Message}");
-                _log.Error($"Stack trace: {ex.StackTrace}");
-            }
-            finally
-            {
-                commandBuffer.Dispose();
+                _log.Error($"ApplyGridRoads failed: {ex.Message}");
             }
         }
 
         private void CreateRoadEntity(ref EntityCommandBuffer commandBuffer, GridLine line)
         {
-            // Create a new entity for the road
-            Entity roadEntity = commandBuffer.CreateEntity();
-
-            // Create a Bezier curve from the grid line
-            // For straight roads, control points are calculated along the line
-            float3 direction = math.normalize(line.End - line.Start);
-            float distance = math.distance(line.Start, line.End);
-
-            // Control points for Bezier curve (straight line)
-            float3 startPos = line.Start;
-            float3 endPos = line.End;
-            float3 startTangent = startPos + direction * (distance * 0.33f);
-            float3 endTangent = endPos - direction * (distance * 0.33f);
-
-            Bezier4x3 curve = new Bezier4x3(startPos, startTangent, endTangent, endPos);
-
-            // Add CreationDefinition component
-            commandBuffer.AddComponent(roadEntity, new CreationDefinition
+            try
             {
-                m_Prefab = _selectedPrefab,
-                m_Owner = Entity.Null,
-                m_Flags = CreationFlags.Permanent
-            });
-
-            // Add NetCourse component with the curve
-            commandBuffer.AddComponent(roadEntity, new NetCourse
-            {
-                m_Curve = curve,
-                m_Length = distance,
-                m_FixedIndex = -1,
-                m_StartPosition = new CoursePos
+                // Validate the grid line
+                float3 delta = line.End - line.Start;
+                if (math.lengthsq(delta) < 0.01f)
                 {
-                    m_Position = startPos,
-                    m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Elevation = startPos.y,
-                    m_ParentMesh = -1
-                },
-                m_EndPosition = new CoursePos
-                {
-                    m_Position = endPos,
-                    m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Elevation = endPos.y,
-                    m_ParentMesh = -1
+                    _log.Warn("Grid line too short, skipping");
+                    return;
                 }
-            });
 
-            // Add Updated component to trigger processing
-            commandBuffer.AddComponent<Updated>(roadEntity);
+                // Create a Bezier curve from the grid line
+                // For straight roads, control points are calculated along the line
+                float3 direction = math.normalize(delta);
+                float distance = math.distance(line.Start, line.End);
 
-            _log.Info($"Created road entity from {startPos} to {endPos}");
+                // Control points for Bezier curve (straight line)
+                float3 startPos = line.Start;
+                float3 endPos = line.End;
+                float3 startTangent = startPos + direction * (distance * 0.33f);
+                float3 endTangent = endPos - direction * (distance * 0.33f);
+
+                Bezier4x3 curve = new Bezier4x3(startPos, startTangent, endTangent, endPos);
+
+                // Create a new entity for the road
+                Entity roadEntity = commandBuffer.CreateEntity();
+
+                // Add CreationDefinition component
+                commandBuffer.AddComponent(roadEntity, new CreationDefinition
+                {
+                    m_Prefab = _selectedPrefab,
+                    m_Owner = Entity.Null,
+                    m_Flags = CreationFlags.Permanent
+                });
+
+                // Add NetCourse component with the curve
+                commandBuffer.AddComponent(roadEntity, new NetCourse
+                {
+                    m_Curve = curve,
+                    m_Length = distance,
+                    m_FixedIndex = -1,
+                    m_StartPosition = new CoursePos
+                    {
+                        m_Position = startPos,
+                        m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
+                        m_Elevation = startPos.y,
+                        m_ParentMesh = -1
+                    },
+                    m_EndPosition = new CoursePos
+                    {
+                        m_Position = endPos,
+                        m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
+                        m_Elevation = endPos.y,
+                        m_ParentMesh = -1
+                    }
+                });
+
+                // Add Updated component to trigger processing
+                commandBuffer.AddComponent<Updated>(roadEntity);
+            }
+            catch (Exception ex)
+            {
+                _log.Error($"CreateRoadEntity failed: {ex.Message}");
+            }
         }
 
         private void ClearGrid()

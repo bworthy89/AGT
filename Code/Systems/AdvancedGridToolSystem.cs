@@ -528,25 +528,25 @@ namespace AdvancedGridTool
                 }
 
                 string prefabName = _currentPrefab != null ? _currentPrefab.name : "Unknown";
-                _log.Info($"Creating roads for {_gridLines.Count} grid lines using prefab: {prefabName}");
+                _log.Info($"Creating road previews for {_gridLines.Count} grid lines using prefab: {prefabName}");
 
-                // Create road entities using EntityCommandBuffer
+                // Create road preview entities using EntityCommandBuffer
                 EntityCommandBuffer commandBuffer = new EntityCommandBuffer(Allocator.TempJob);
 
                 try
                 {
                     foreach (var line in _gridLines)
                     {
-                        CreateRoadEntity(ref commandBuffer, line);
+                        CreateRoadPreview(ref commandBuffer, line);
                     }
 
-                    // Execute the command buffer to create all roads
+                    // Execute the command buffer to create all road previews
                     commandBuffer.Playback(EntityManager);
-                    _log.Info($"Successfully created {_gridLines.Count} roads");
+                    _log.Info($"Successfully created {_gridLines.Count} road previews");
                 }
                 catch (Exception ex)
                 {
-                    _log.Error($"Failed to create roads: {ex.Message}");
+                    _log.Error($"Failed to create road previews: {ex.Message}");
                     if (ex.StackTrace != null)
                     {
                         _log.Error($"Stack trace: {ex.StackTrace}");
@@ -563,7 +563,7 @@ namespace AdvancedGridTool
             }
         }
 
-        private void CreateRoadEntity(ref EntityCommandBuffer commandBuffer, GridLine line)
+        private void CreateRoadPreview(ref EntityCommandBuffer commandBuffer, GridLine line)
         {
             try
             {
@@ -576,7 +576,6 @@ namespace AdvancedGridTool
                 }
 
                 // Create a Bezier curve from the grid line
-                // For straight roads, control points are calculated along the line
                 float3 direction = math.normalize(delta);
                 float distance = math.distance(line.Start, line.End);
 
@@ -588,19 +587,26 @@ namespace AdvancedGridTool
 
                 Bezier4x3 curve = new Bezier4x3(startPos, startTangent, endTangent, endPos);
 
-                // Create a new entity for the road
-                Entity roadEntity = commandBuffer.CreateEntity();
+                // Create a new entity for the road PREVIEW
+                Entity previewEntity = commandBuffer.CreateEntity();
 
-                // Add CreationDefinition component
-                commandBuffer.AddComponent(roadEntity, new CreationDefinition
+                // Add Temp component to make it a PREVIEW (blue highlighted)
+                commandBuffer.AddComponent(previewEntity, new Temp
+                {
+                    m_Flags = TempFlags.Create,
+                    m_Original = Entity.Null
+                });
+
+                // Add CreationDefinition component WITHOUT Permanent flag
+                commandBuffer.AddComponent(previewEntity, new CreationDefinition
                 {
                     m_Prefab = _selectedPrefab,
                     m_Owner = Entity.Null,
-                    m_Flags = CreationFlags.Permanent
+                    m_Flags = CreationFlags.None  // NOT Permanent - this makes it a preview
                 });
 
                 // Add NetCourse component with the curve
-                commandBuffer.AddComponent(roadEntity, new NetCourse
+                commandBuffer.AddComponent(previewEntity, new NetCourse
                 {
                     m_Curve = curve,
                     m_Length = distance,
@@ -622,11 +628,13 @@ namespace AdvancedGridTool
                 });
 
                 // Add Updated component to trigger processing
-                commandBuffer.AddComponent<Updated>(roadEntity);
+                commandBuffer.AddComponent<Updated>(previewEntity);
+
+                _log.Info($"Created road preview entity from {startPos} to {endPos}");
             }
             catch (Exception ex)
             {
-                _log.Error($"CreateRoadEntity failed: {ex.Message}");
+                _log.Error($"CreateRoadPreview failed: {ex.Message}");
             }
         }
 

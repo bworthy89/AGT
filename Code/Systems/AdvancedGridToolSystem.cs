@@ -187,20 +187,29 @@ namespace AdvancedGridTool
 
         public override bool TrySetPrefab(PrefabBase prefab)
         {
-            // CRITICAL: Only accept prefab if tool is already active
-            if (m_ToolSystem.activeTool == this && prefab is RoadPrefab roadPrefab)
+            // CRITICAL: Only accept ROAD prefabs (not paths, fences, etc.)
+            if (prefab is RoadPrefab roadPrefab)
             {
                 _currentPrefab = prefab;
                 _selectedPrefab = m_PrefabSystem.GetEntity(prefab);
-                _log.Info($"Set prefab: {prefab.name}");
-                return true;
-            }
 
-            // Store prefab for later use
-            if (prefab is RoadPrefab)
-            {
-                _currentPrefab = prefab;
-                _selectedPrefab = m_PrefabSystem.GetEntity(prefab);
+                // Validate the prefab entity exists
+                if (_selectedPrefab == Entity.Null)
+                {
+                    _log.Error($"Failed to get entity for road prefab: {prefab.name}");
+                    return false;
+                }
+
+                // Check if prefab has required components for road creation
+                if (!EntityManager.HasComponent<NetGeometryData>(_selectedPrefab))
+                {
+                    _log.Warn($"Road prefab {prefab.name} missing NetGeometryData component");
+                }
+
+                _log.Info($"Set road prefab: {prefab.name} (Entity: {_selectedPrefab.Index})");
+
+                // Only return true if tool is active
+                return m_ToolSystem.activeTool == this;
             }
 
             return false;
@@ -514,10 +523,17 @@ namespace AdvancedGridTool
         {
             try
             {
-                // Check if we have a valid road prefab
+                // Validate road prefab
                 if (_currentPrefab == null || _selectedPrefab == Entity.Null)
                 {
                     _log.Error("No road prefab selected, cannot create roads");
+                    return;
+                }
+
+                // Ensure it's actually a RoadPrefab
+                if (!(_currentPrefab is RoadPrefab roadPrefab))
+                {
+                    _log.Error($"Selected prefab is not a road: {_currentPrefab.GetType().Name}");
                     return;
                 }
 
@@ -527,8 +543,15 @@ namespace AdvancedGridTool
                     return;
                 }
 
-                string prefabName = _currentPrefab != null ? _currentPrefab.name : "Unknown";
-                _log.Info($"Creating road previews for {_gridLines.Count} grid lines using prefab: {prefabName}");
+                // Validate prefab has required components
+                if (!EntityManager.HasComponent<NetGeometryData>(_selectedPrefab))
+                {
+                    _log.Error($"Road prefab {roadPrefab.name} is missing NetGeometryData - cannot create roads");
+                    return;
+                }
+
+                _log.Info($"Creating {_gridLines.Count} road previews using: {roadPrefab.name}");
+                _log.Info($"Road prefab entity: {_selectedPrefab.Index}, HasGeometry: {EntityManager.HasComponent<NetGeometryData>(_selectedPrefab)}");
 
                 // CRITICAL: Use m_ToolOutputBarrier like Line Tool
                 // The game automatically adds Temp component to these entities!
@@ -536,12 +559,14 @@ namespace AdvancedGridTool
 
                 try
                 {
+                    int created = 0;
                     foreach (var line in _gridLines)
                     {
                         CreateRoadPreview(ref commandBuffer, line);
+                        created++;
                     }
 
-                    _log.Info($"Queued {_gridLines.Count} road preview entities");
+                    _log.Info($"Queued {created} road preview entities for creation");
                 }
                 catch (Exception ex)
                 {

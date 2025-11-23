@@ -281,8 +281,7 @@ namespace AdvancedGridTool
             // Handle input
             HandleInput();
 
-            // Render overlay guidelines
-            RenderGridOverlay();
+            // NO overlay rendering - previews only (like Line Tool)
 
             return inputDeps;
         }

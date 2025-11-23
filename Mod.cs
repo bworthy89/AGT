@@ -50,14 +50,17 @@ namespace AdvancedGridTool
             // Apply input bindings
             m_Settings.RegisterKeyBindings();
 
+            // DISABLED: Keybinding activation (toolbar-only now)
             // Get tool activation action
-            m_ToolActivationAction = m_Settings.GetAction(kToolActivationActionName);
-            if (m_ToolActivationAction != null)
-            {
-                m_ToolActivationAction.shouldBeEnabled = true;
-                m_ToolActivationAction.onInteraction += OnToolActivation;
-                log.Info($"Registered tool activation action");
-            }
+            // m_ToolActivationAction = m_Settings.GetAction(kToolActivationActionName);
+            // if (m_ToolActivationAction != null)
+            // {
+            //     m_ToolActivationAction.shouldBeEnabled = true;
+            //     m_ToolActivationAction.onInteraction += OnToolActivation;
+            //     log.Info($"Registered tool activation action");
+            // }
+
+            log.Info("Tool activation via keybinding DISABLED - use toolbar only");
 
             // Load saved settings
             AssetDatabase.global.LoadSettings(nameof(AdvancedGridTool), m_Settings, new ModSettings(this));

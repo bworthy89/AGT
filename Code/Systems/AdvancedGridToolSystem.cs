@@ -580,18 +580,18 @@ namespace AdvancedGridTool
                 {
                     m_Position = startPos,
                     m_OriginalEntity = Entity.Null,
-                    m_ElementIndex = new PathNode(),
+                    m_ElementIndex = 0,
                     m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Direction = direction,
+                    m_Direction = new float2(direction.x, direction.z),
                     m_Elevation = startPos.y
                 },
                 m_EndPosition = new ControlPoint
                 {
                     m_Position = endPos,
                     m_OriginalEntity = Entity.Null,
-                    m_ElementIndex = new PathNode(),
+                    m_ElementIndex = 1,
                     m_Rotation = quaternion.LookRotationSafe(direction, math.up()),
-                    m_Direction = direction,
+                    m_Direction = new float2(direction.x, direction.z),
                     m_Elevation = endPos.y
                 }
             });

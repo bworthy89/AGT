@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Advanced Grid Tool for Cities: Skylines II** - A comprehensive grid-based road network generation tool that extends the game's built-in grid functionality with advanced procedural generation algorithms. Successfully compiled and following Advanced Line Tool patterns exactly.
 
-## ✅ Build Status: REFACTORED TO GUIDELINE MODE (Like In-Game Grid Tool)
+## ✅ Build Status: AUTOMATIC ROAD PLACEMENT IMPLEMENTED
 
-### Current Status (2025-11-23 Update)
+### Current Status (2025-11-23 Update - Latest)
 - ✅ **Mod loads in game** - Settings appear, keybindings work
 - ✅ **UI module registers** - Console shows "Advanced Grid Tool UI module registrations completed"
 - ✅ **Architecture complete** - Following Line Tool patterns exactly + all recommended improvements
@@ -17,9 +17,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ✅ **PrefabChanged event handler** - Tool reactivates when prefab changes
 - ✅ **Spacing modifiers** - Shift (×10), Ctrl (×0.1), default (×1) like Line Tool
 - ✅ **Tool list reordering** - Properly positions tool in tool list
-- ✅ **Grid guideline mode** - Shows overlay guidelines like in-game grid tool
-- ✅ **User places roads manually** - Uses NetToolSystem for actual road placement
+- ✅ **Grid overlay rendering** - Shows grid lines and intersection points
+- ✅ **Automatic road placement** - Creates all roads when grid is defined (NEW)
+- ✅ **Safety checks** - Prevents toolbar crashes with comprehensive validation
 - ⚠️ **Missing icons** - Mode icons return 404 (cosmetic issue only)
+- 🧪 **Needs testing** - In-game testing required to verify road creation
 
 ## Architecture - Following Advanced Line Tool Patterns
 
@@ -46,19 +48,21 @@ cd UI && npm run dev     # Development watch mode
 
 ### Core Systems
 
-#### 1. AdvancedGridToolSystem.cs (REFACTORED - Guideline Mode)
+#### 1. AdvancedGridToolSystem.cs (AUTOMATIC ROAD PLACEMENT)
 - **Extends**: `ObjectToolBaseSystem`
-- **Approach**: Works like in-game grid tool - provides guidelines, not auto-placement
+- **Approach**: Automatically creates roads along grid lines when grid is defined
 - **Key Features**:
   - Tool activation via hotkey (Ctrl+G default)
-  - Grid guideline generation with 6 modes (Standard, Organic, Suburban, Hex, Curved, Terrain)
-  - Overlay rendering using buffer instance methods
+  - Grid generation with 6 modes (Standard, Organic, Suburban, Hex, Curved, Terrain)
+  - Overlay rendering using buffer instance methods shows grid preview
   - Input handling with ControlPoint (not RaycastHit)
   - User clicks to set grid corners (start/end positions)
   - Tool displays grid lines and intersection points as overlay
-  - User manually places roads using NetToolSystem with grid snapping
-  - No automatic road entity creation (lets game systems handle it)
-- **System References**: Uses `m_ToolSystem`, `m_PrefabSystem`, `m_NetToolSystem`
+  - **Automatic road creation** - Creates all roads when end position is set
+  - Uses EntityCommandBuffer for road entity creation
+  - Creates roads with CreationDefinition and NetCourse components
+  - Generates Bezier4x3 curves for straight road segments
+- **System References**: Uses `m_ToolSystem`, `m_PrefabSystem`, `m_NetToolSystem`, `EntityManager`
 
 #### 2. AdvancedGridToolUISystem.cs (UPDATED - All Line Tool Improvements)
 - **Extends**: `UISystemBase`
@@ -194,33 +198,45 @@ AdvancedGridTool/
 └── AdvancedGridTool.csproj (Project file)
 ```
 
-## How It Works (Guideline Mode - Like In-Game Grid Tool)
+## How It Works (Automatic Road Placement)
 
 ### Tool Usage Flow
 1. **Activate Tool**: Press Ctrl+G to activate Advanced Grid Tool
-2. **Select Grid Area**: Click to set start corner, click again to set end corner
-3. **Grid Guidelines Appear**: Tool displays grid lines and intersection points as overlay
-4. **Place Roads Manually**: Switch to road tool (or let it auto-switch) and place roads following the grid guidelines
-5. **Grid Snapping**: Snap to grid intersection points for perfect alignment
-6. **Reset Grid**: Right-click or press Escape to clear grid and start over
+2. **Select Road Prefab**: Choose a road type from the toolbar (e.g., Small Road, Medium Road)
+3. **Set Start Corner**: Click to set the first corner of your grid area
+4. **Set End Corner**: Click to set the opposite corner
+5. **Automatic Road Creation**: Tool automatically creates all roads along grid lines
+6. **Grid Overlay**: See grid preview with white/cyan lines while defining area
+7. **Reset Grid**: Press Escape to clear grid and start over
 
-### Key Difference from Previous Version
-- **OLD**: Tool tried to auto-create road entities (didn't work with game systems)
-- **NEW**: Tool provides guidelines and snapping (works exactly like in-game grid tool)
-- **Benefit**: Works with game's native NetToolSystem, no entity creation conflicts
+### Implementation Details
+- **Grid Preview**: Shows grid lines and intersection points as overlay while defining area
+- **Road Entity Creation**: Uses `EntityCommandBuffer` to create road entities
+- **Bezier Curves**: Generates `Bezier4x3` curves for each road segment
+- **Components**: Adds `CreationDefinition`, `NetCourse`, and `Updated` components
+- **Processing**: Game's systems process the created entities to build actual roads
+
+### Road Creation Components
+Each road is created with:
+1. **CreationDefinition** - Specifies the road prefab and creation flags
+2. **NetCourse** - Contains Bezier curve, length, start/end positions
+3. **Updated** - Triggers game systems to process the road entity
+4. **ControlPoints** - Start and end points with position, rotation, direction, elevation
 
 ## Next Steps
 1. ✅ **All Line Tool Improvements Implemented** - PrefabChanged events, spacing modifiers, tool list ordering
-2. ✅ **Guideline Mode** - Tool now works like in-game grid tool
-3. **Test In-Game** - Verify all improvements work correctly
-4. **Implement Advanced Grid Algorithms** - Add procedural generation logic for each mode:
+2. ✅ **Automatic Road Placement** - EntityCommandBuffer-based road creation implemented
+3. ✅ **Safety Checks** - All toolbar crash fixes applied
+4. 🧪 **Test In-Game** - Verify automatic road creation works correctly (NEXT STEP)
+5. **Debug if Needed** - Check logs for any entity creation errors
+6. **Implement Advanced Grid Algorithms** - Add procedural generation logic for each mode:
    - Organic: Voronoi + Perlin noise
    - Suburban: Curvilinear streets + cul-de-sacs
    - Hexagonal: Axial coordinate system
    - Curved: Bezier curve generation
    - Terrain Adaptive: Height sampling
-5. **Custom Icons** - Create proper icons for grid modes (currently using placeholders)
-6. **Performance** - Add Burst compilation for heavy grid calculations
+7. **Custom Icons** - Create proper icons for grid modes (currently using placeholders)
+8. **Performance** - Add Burst compilation for heavy grid calculations
 
 ## Common Pitfalls to Avoid
 
@@ -248,16 +264,23 @@ AdvancedGridTool/
 
 ## Development Notes
 
-### Major Refactor - 2025-11-23
+### Major Refactor - 2025-11-23 (Latest)
 - **Implemented all Line Tool comparison recommendations**:
   1. ✅ Added PrefabChanged event handler (High Priority)
   2. ✅ Completed tool list reordering (High Priority)
   3. ✅ Added spacing step modifiers - Shift (×10), Ctrl (×0.1), default (×1)
-  4. ✅ Refactored road creation to guideline mode (like in-game grid tool)
-- **Changed approach from auto-placement to guideline mode**:
-  - OLD: Tried to create road entities directly (didn't work with game systems)
-  - NEW: Provides grid guidelines and snapping (works like in-game tool)
-  - Uses NetToolSystem for actual road placement (user-driven)
+  4. ✅ Implemented automatic road placement with EntityCommandBuffer
+- **Automatic road placement implementation**:
+  - Creates road entities when user sets grid end position
+  - Uses EntityCommandBuffer with proper component setup
+  - Generates Bezier4x3 curves for each road segment
+  - Adds CreationDefinition, NetCourse, and Updated components
+  - Lets game systems process and build the actual roads
+- **Safety improvements**:
+  - Added comprehensive null checks to prevent toolbar crashes
+  - Query validation before accessing singletons
+  - Grid generation validation (distance checks, terrain system checks)
+  - UI binding null safety
 - **Architecture now matches Line Tool exactly** (A- grade → A+ grade)
 
 ### Previous Milestones
@@ -277,4 +300,5 @@ AdvancedGridTool/
 3. **Corrected tooltip theme path**: Fixed from "components/tooltips" to "common/tooltip"
 4. **Removed prop cloning**: Directly mutate `result.props.children?.push()` instead of cloning
 5. **Get FocusDisabled from registry**: Don't create it manually, get from registry
-6. **Guideline mode refactor**: Changed from entity creation to guideline overlay (2025-11-23)
+6. **Toolbar crash prevention**: Added query safety checks, grid validation, null checks (2025-11-23)
+7. **Automatic road placement**: Implemented EntityCommandBuffer-based road creation (2025-11-23)

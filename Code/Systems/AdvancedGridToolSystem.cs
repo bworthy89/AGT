@@ -296,13 +296,17 @@ namespace AdvancedGridTool
                 {
                     _endPosition = controlPoint.m_Position;
                     _hasEndPosition = true;
+
+                    float3 delta = _endPosition - _startPosition;
+                    float clickDistance = math.length(delta);
+                    _log.Info($"CLICK: Set end position: {_endPosition}, distance from start: {clickDistance:F2}m");
+
                     GenerateGrid();
 
                     // Automatically create roads along grid lines
                     ApplyGridRoads();
 
                     PlaySound(false);
-                    _log.Info($"Set end position: {_endPosition}, roads created");
                 }
                 else
                 {
@@ -363,9 +367,13 @@ namespace AdvancedGridTool
         {
             // Safety check: make sure start and end positions are different
             float3 delta = _endPosition - _startPosition;
-            if (math.lengthsq(delta) < 0.01f)
+            float distance = math.length(delta);
+
+            _log.Info($"GenerateStandardGrid: Start={_startPosition}, End={_endPosition}, Distance={distance}m");
+
+            if (distance < 1.0f) // Minimum 1 meter apart
             {
-                _log.Warn("Start and end positions are too close, skipping grid generation");
+                _log.Warn($"Start and end positions are too close ({distance:F2}m), need at least 1m");
                 return;
             }
 
